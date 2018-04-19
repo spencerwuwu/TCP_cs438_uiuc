@@ -1,10 +1,31 @@
-all: reliable_sender reliable_receiver
+SENDER=reliable_sender
+RECEIVER=reliable_receiver
 
-reliable_sender:
-	gcc -o reliable_sender sender_main.c
+SENDER-DEBUG=reliable_sender-debug
+RECEIVER-DEBUG=reliable_receiver-debug
 
-reliable_receiver:
-	gcc -o reliable_receiver receiver_main.c
+# set up compiler
+CC = gcc
+WARNINGS = -Wall -Wextra -Werror -Wno-error=unused-parameter
+CFLAGS   = -std=gnu11 -pthread
+DEBUG	 = -g
+
+all: $(SENDER) $(RECEIVER)
+sender: $(SENDER)
+receiver: $(RECEIVER)
+debug: $(SENDER-DEBUG) $(RECEIVER-DEBUG)
+
+$(SENDER): tcp_sender.c sender_main.c
+	$(CC) $^ $(CFLAGS) -o $(SENDER)
+
+$(RECEIVER): receiver_main.c
+	$(CC) $^ $(CFLAGS) -o $(RECEIVER)
+
+$(SENDER-DEBUG): tcp_sender.c sender_main.c
+	$(CC) $^ $(CFLAGS) $(DEBUG) -o $(SENDER-DEBUG)
+
+$(RECEIVER-DEBUG): receiver_main.c
+	$(CC) $^ $(CFLAGS) $(DEBUG) -o $(RECEIVER-DEBUG)
 
 clean:
-	rm reliable_sender reliable_receiver
+	$(RM) $(SENDER) $(RECEIVER) $(SENDER-DEBUG) $(RECEIVER-DEBUG)
