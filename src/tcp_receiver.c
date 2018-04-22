@@ -1,0 +1,71 @@
+#include "tcp_receiver.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <sys/time.h>
+
+/*
+ * Global variables
+ */
+extern Receiver_info *Receiver;
+
+
+
+Receiver_info *init_receiver() {
+    Receiver_info *receiver = malloc(sizeof(Receiver_info));
+    receiver->NFE = 0;
+    receiver->status = CLOSED;
+    for (int i = 0; i < RWS; i++) receiver->present[i] = 0;
+}
+
+
+void handle_sender_msg(char *msg, size_t length, int filefd) {
+    int seq_num = msg[2];
+    char size_char[4];
+    size_char[0] = msg[3];
+    size_char[1] = msg[4];
+    size_char[2] = msg[5];
+    size_char[3] = msg[6];
+
+    recv_frame(msg + SEND_HEADER, (size_t)size_char, seq_num, filefd);
+}
+
+void recv_frame(char *data, size_t length, int seq_num, int filefd) {
+    int idx, i;
+    if (seq_num - Receiver->NFE < RWS) {
+        idx = (seq_num % RWS);
+
+        if (!Receiver->present[idx]) {
+            Receiver->present[idx] = 1;
+            memcpy(Receiver->buf[idx], data, length);
+            Receiver->buf_len[idx] = length;
+        }
+        for (i = 0; i < RWS; i++) {
+            idx = (i + Receiver->NFE) % RWS;
+
+            if (!Receiver->present[idx]) break;
+            write_to_filefd(filefd, Receiver->buf_len[idx], Receiver->buf[idx]);
+        }
+    }
+}
+
+ssize_t write_to_filefd(int filefd, size_t length, char *data) {
+    ssize_t bytes = 0;
+    int rc = 0;
+    while (bytes < (ssize_t)length) {
+        rc = write(filefd, data + bytes, length - bytes);
+        write(STDERR_FILENO, data + bytes, length - bytes);
+        if (rc == 0) return 0;
+        else if (rc == -1) {
+            if (errno == EINTR) continue;
+            else return -1;
+        }
+        bytes += rc;
+    }
+    return bytes;
+}

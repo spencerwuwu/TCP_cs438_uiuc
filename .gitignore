@@ -1,3 +1,8 @@
+/src/test_file/*
+/src/reliable_sender
+/src/reliable_receiver
+
+
 # Prerequisites
 *.d
 

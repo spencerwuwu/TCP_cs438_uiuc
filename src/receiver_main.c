@@ -1,3 +1,5 @@
+#include "tcp_receiver.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -9,18 +11,25 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+/*
+ * Global variables
+ */
+Receiver_info *Receiver;
 
 /* 
  * Static variables 
  */
 static int socket_UDP;
+static int file_fd;
 
 /*
  * Function Declaration
  */
 void setup_UDP(char *port);
+void setup_filefd(char *filename);
 void receive_packet();
-void reliablyReceive(unsigned short int myUDPport, char* destinationFile);
 
 int main(int argc, char** argv)
 {
@@ -34,8 +43,12 @@ int main(int argc, char** argv)
 	
 	udpPort = (unsigned short int)atoi(argv[1]);
 	
-	//reliablyReceive(udpPort, argv[2]);
     setup_UDP(argv[1]);
+
+    setup_filefd(argv[2]);
+    
+    Receiver = init_receiver();
+
     receive_packet();
 
 
@@ -76,11 +89,23 @@ void setup_UDP(char *port) {
 
 }
 
+void setup_filefd(char *filename) {
+    file_fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+    if (file_fd < 0) {
+        perror("open file error");
+        exit(1);
+    }
+}
+
 void receive_packet() {
     char from_addr[100];
     struct sockaddr_in sender_addr;
     socklen_t sender_addrLen;
-    unsigned char recvBuf[1000];
+    char recvBuf[1500];
+    char msg[100];
+    msg[0] = 'A';
+    msg[1] = 'C';
+
     int bytesRecvd;
     while(1) {
         if ((bytesRecvd = recvfrom(socket_UDP, recvBuf, 1000 , 0, 
@@ -90,8 +115,12 @@ void receive_packet() {
         }
         inet_ntop(AF_INET, &sender_addr.sin_addr, from_addr, 100);
         write(STDERR_FILENO, recvBuf, bytesRecvd);
+        msg[2] = recvBuf[2];
+
+        if (recvBuf[0] == 'S' && recvBuf[1] == 'E') {
+            sendto(socket_UDP, msg, 3, 0, (struct sockaddr*)&sender_addr, sizeof(sender_addr));
+            handle_sender_msg(recvBuf, bytesRecvd, file_fd);
+        }
     }
 }
 
-void reliablyReceive(unsigned short int myUDPport, char* destinationFile) {
-}

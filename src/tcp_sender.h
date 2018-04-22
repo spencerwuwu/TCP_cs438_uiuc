@@ -20,11 +20,13 @@ enum Sender_State {
  * for sender
  */
 typedef struct _tcp_sender {
+    int status;
+
+    /* structures for sliding windows */
     int LAR;    // Last Ack Received
     int LFS;    // Last Frame Sent
     int present[SWS];
-    char *packet[SWS];
-    int status;
+
 } Sender_info;
 
 
@@ -36,12 +38,12 @@ void setup_buff(char *filename, size_t bytes);
 size_t read_file_line(int sockfd, char *msg, size_t length);
 
 /* Generate the packet with the following format:
- *      0 - 3   seq_num (1 byte)
- *      4 - 7   ack_num (1 byte)
- *      8 - 11  length  (4 bytes)
- *      12 ~     content
+ *      0 - 1   "SE" (2 byte)
+ *      2       seq_num (1 byte)
+ *      3 - 6   length  (4 bytes)
+ *      7 ~     content
  */
-char *build_msg_packet(TCP_packet *packet);
+char *build_msg_packet(Buffer_Frame frame);
 
 
 /* Calculate the new RTT time */

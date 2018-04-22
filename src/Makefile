@@ -18,13 +18,13 @@ debug: $(SENDER-DEBUG) $(RECEIVER-DEBUG)
 $(SENDER): tcp_sender.c sender_main.c
 	$(CC) $^ $(CFLAGS) -o $(SENDER)
 
-$(RECEIVER): receiver_main.c
+$(RECEIVER): tcp_receiver.c receiver_main.c
 	$(CC) $^ $(CFLAGS) -o $(RECEIVER)
 
 $(SENDER-DEBUG): tcp_sender.c sender_main.c
 	$(CC) $^ $(CFLAGS) $(DEBUG) -o $(SENDER-DEBUG)
 
-$(RECEIVER-DEBUG): receiver_main.c
+$(RECEIVER-DEBUG): tcp_receiver.c receiver_main.c
 	$(CC) $^ $(CFLAGS) $(DEBUG) -o $(RECEIVER-DEBUG)
 
 clean:

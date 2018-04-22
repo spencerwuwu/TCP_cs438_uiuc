@@ -7,31 +7,41 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <sys/time.h>
 
 /*
  * Global variables
  */
-extern Sender_info *sender;
-extern Buffer_frame *buffer_frame;
-extern size_t frame_num;
+extern Sender_info *Sender;
+extern Buffer_Frame *Buffer_frame;
+extern size_t Frame_num;
 
 
 Sender_info *init_sender() {
+    Sender_info *sender = malloc(sizeof(Sender_info));
     int i = 0;
-    for (i = 0; i < SWS; i++) sender->present[i] = 0;
+    for (i = 0; i < SWS; i++) {
+        sender->present[i] = -1;
+        sender->packet[i] = NULL;
+    }
+    sender->LAR = -1;
+    sender->LFS = -1;
+    sender->status = LISTEN;
+    return sender;
 }
 
 void setup_buff(char *filename, size_t bytes) {
     int file_fd = open(filename, O_RDONLY);
-    frame_num = bytes / FRAME_SIZE;
-    if (bytes % FRAME_SIZE) frame_num++;
+    Frame_num = bytes / FRAME_SIZE;
+    if (bytes % FRAME_SIZE) Frame_num++;
 
-    buffer_frame = calloc(frame_num, sizeof(Buffer_frame));
+    Buffer_frame = calloc(Frame_num, sizeof(Buffer_frame));
     size_t bytes_read = 0;
-    for (size_t i = 0; i < frame_num; i++) {
-        bytes_read = read_file_line(file_fd, buffer_frame[i].data, FRAME_SIZE);
-        buffer_frame[i].length = bytes_read;
-        buffer_frame[i].seq_num = i;
+    for (size_t i = 0; i < Frame_num; i++) {
+        bytes_read = read_file_line(file_fd, Buffer_frame[i].data, FRAME_SIZE);
+        Buffer_frame[i].length = bytes_read;
+        Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
+        write(STDERR_FILENO, Buffer_frame[i].data, bytes_read);
     }
 }
 
@@ -56,30 +66,22 @@ size_t read_file_line(int sockfd, char *msg, size_t length) {
     return n;
 }
 
-char *build_msg_packet(TCP_packet *packet) {
-    char *msg = calloc(packet->length + 12, sizeof(char)); 
-    char *size = calloc(sizeof(char), 4);
-    size = (char *)&packet->seq_num;
-    msg[0] = size[0];
-    msg[1] = size[1];
-    msg[2] = size[2];
-    msg[3] = size[3];
+char *build_msg_packet(Buffer_Frame frame) {
+    char *msg = calloc(frame.length + SEND_HEADER, sizeof(char)); 
+    msg[0] = 'S';
+    msg[1] = 'E';
+    msg[2] = frame.seq_num;
 
-    size = (char *)&packet->ack_num;
-    msg[4] = size[0];
-    msg[5] = size[1];
-    msg[6] = size[2];
-    msg[7] = size[3];
+    char *size = (char *)&frame.length;
+    msg[3] = size[0];
+    msg[4] = size[1];
+    msg[5] = size[2];
+    msg[6] = size[3];
 
-    size = (char *)&packet->length;
-    msg[8] = size[0];
-    msg[9] = size[1];
-    msg[10] = size[2];
-    msg[11] = size[3];
 
     int i = 0;
-    for ( ; i < packet->length; i++) {
-        msg[12 + i] = packet->content[i];
+    for ( ; i < frame.length; i++) {
+        msg[SEND_HEADER + i] = frame.data[i];
     }
 
     return msg;
