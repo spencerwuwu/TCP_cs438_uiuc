@@ -6,7 +6,7 @@ RECEIVER-DEBUG=reliable_receiver-debug
 
 # set up compiler
 CC = gcc
-WARNINGS = -Wall -Wextra -Werror -Wno-error=unused-parameter
+WARNINGS = -Wall -Wextra -Werror -Wno-error=unused-parameter -Wmissing-declarations -Wmissing-variable-declarations
 CFLAGS   = -std=gnu11 -pthread
 DEBUG	 = -g
 

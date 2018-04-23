@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <sys/time.h>
 
@@ -32,10 +33,22 @@ Sender_info *init_sender() {
 
 void setup_buff(char *filename, size_t bytes) {
     int file_fd = open(filename, O_RDONLY);
-    Frame_num = bytes / FRAME_SIZE;
-    if (bytes % FRAME_SIZE) Frame_num++;
+    if (file_fd < 0) {
+        perror("open");
+        exit(1);
+    }
+    struct stat local_stat;
+    if (fstat(file_fd, &local_stat) < 0) {
+        close(file_fd);
+        return;
+    }
+    //size_t data_size = bytes < local_stat.st_size ? bytes : local_stat.st_size;
+    size_t data_size = local_stat.st_size;
 
-    Buffer_frame = calloc(Frame_num, sizeof(Buffer_frame));
+    Frame_num = data_size / FRAME_SIZE;
+    if (data_size % FRAME_SIZE) Frame_num++;
+
+    Buffer_frame = calloc(Frame_num, sizeof(Buffer_Frame));
     size_t bytes_read = 0;
     for (size_t i = 0; i < Frame_num; i++) {
         bytes_read = read_file_line(file_fd, Buffer_frame[i].data, FRAME_SIZE);
@@ -43,7 +56,6 @@ void setup_buff(char *filename, size_t bytes) {
         Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
         Buffer_frame[i].packet = build_msg_packet(Buffer_frame[i]);
         Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
-        write(STDERR_FILENO, Buffer_frame[i].data, bytes_read);
     }
 }
 
@@ -68,17 +80,14 @@ size_t read_file_line(int sockfd, char *msg, size_t length) {
     return n;
 }
 
-char *build_msg_packet(Buffer_Frame frame) {
-    char *msg = calloc(frame.length + SEND_HEADER, sizeof(char)); 
+unsigned char *build_msg_packet(Buffer_Frame frame) {
+    unsigned char *msg = malloc(frame.length + SEND_HEADER); 
     msg[0] = 'S';
     msg[1] = 'E';
     msg[2] = frame.seq_num;
 
-    char *size = (char *)&frame.length;
-    msg[3] = size[0];
-    msg[4] = size[1];
-    msg[5] = size[2];
-    msg[6] = size[3];
+    msg[3] = frame.length / 256;
+    msg[4] = frame.length % 256;
 
 
     int i = 0;

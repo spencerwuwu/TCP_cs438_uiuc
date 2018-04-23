@@ -6,9 +6,9 @@
 #define RWS 150
 #define SWS 150
 #define MAX_SEQ_NO 300
-#define FRAME_SIZE 100
+#define FRAME_SIZE 1000
 
-#define SEND_HEADER 7
+#define SEND_HEADER 5
 
 
 /* 
@@ -35,9 +35,9 @@ typedef struct _tcp_ack {
 typedef struct _Buffer_frame {
     char data[FRAME_SIZE];
     size_t length;
-    size_t seq_num;
+    int seq_num;
 
     /* packet */
-    char *packet;
+    unsigned char *packet;
     size_t packet_len;
 } Buffer_Frame;

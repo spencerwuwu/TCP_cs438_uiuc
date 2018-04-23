@@ -33,6 +33,6 @@ typedef struct _tcp_receiver {
  */
 Receiver_info *init_receiver();
 
-void handle_sender_msg(char *msg, size_t length, int filefd);
+void handle_sender_msg(unsigned char *msg, size_t length, int filefd);
 void recv_frame(char *data, size_t length, int seq_num, int filefd);
 ssize_t write_to_filefd(int filefd, size_t length, char *data);

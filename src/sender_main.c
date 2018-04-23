@@ -18,7 +18,7 @@
 Sender_info *Sender;
 Buffer_Frame *Buffer_frame;
 size_t Frame_num;
-long int RTT = 30 * 1000; // initial RTT to 30 ms with us
+long int RTT = 30 * 1000; // initial RTT to 30 ms (unit us)
 
 /* 
  * Static variables 
@@ -58,6 +58,7 @@ int main(int argc, char** argv) {
     }
     */
     setup_buff(argv[3], numBytes);
+    Sender = init_sender();
 
 
     // Start thread for send and receive
@@ -67,7 +68,10 @@ int main(int argc, char** argv) {
 	pthread_t receive_tid;
 	pthread_create(&receive_tid, 0, receive_reply, (void*)0);
 
+    pthread_join(send_tid, NULL);
+    pthread_join(receive_tid, NULL);
 
+    return 0;
 } 
 
 void setup_UDP(char *hostname, unsigned short int port) {
@@ -107,22 +111,28 @@ void setup_UDP(char *hostname, unsigned short int port) {
 void *reliable_send() {
     struct timeval current;
 
-    while (Sender->LAR < Frame_num) {
+    while (Sender->LAR < (int)Frame_num) {
         int idx;
         for (int i = 0; i < SWS; i++) {
             idx = (i + Sender->LAR) % SWS;
-            pthread_mutex_lock(&mutex);
+            //pthread_mutex_lock(&mutex);
             if (Sender->present[i] == -1) {
                 // Initial
                 size_t target = Sender->LAR + i + 1;
-                if (target > Frame_num) break;
+                if (target >= Frame_num) {
+                    Sender->present[i] = 2;
+                    pthread_mutex_unlock(&mutex);
+                    continue;
+                }
                 Sender->present[i] = 0;
                 Sender->buff[i] = &Buffer_frame[target];
                 send_msg(Sender->buff[i]->packet, Sender->buff[i]->packet_len);
                 gettimeofday(&Sender->send_time[i], 0);
+                fprintf(stderr, "on %zu %zu\n", i, Sender->buff[i]->packet_len);
 
             } else if (Sender->present[i] == -2) {
                 // New update buff
+                fprintf(stderr, "on %zu\n", i);
                 Sender->present[i] = 0;
                 send_msg(Sender->buff[i]->packet, Sender->buff[i]->packet_len);
                 gettimeofday(&Sender->send_time[i], 0);
@@ -130,15 +140,18 @@ void *reliable_send() {
             } else if (Sender->present[i] == 0) {
                 // If not ack yet
                 gettimeofday(&current, 0);
-                if (current.tv_usec - Sender->send_time[i].tv_usec >= RTT) {
+                //if (current.tv_usec - Sender->send_time[i].tv_usec >= RTT) {
+                if (current.tv_sec - Sender->send_time[i].tv_sec >= 1) {
+                    fprintf(stderr, "re %zu\n", i);
                     send_msg(Sender->buff[i]->packet, Sender->buff[i]->packet_len);
                     gettimeofday(&Sender->send_time[i], 0);
-                    RTT = RTT * 2;
+                    //RTT = RTT * 2;
                 }
             } else if (Sender->present[i] == 2) {
                 // It is finished
+                //fprintf(stderr, "end %zu\n", i);
             }
-            pthread_mutex_unlock(&mutex);
+            //pthread_mutex_unlock(&mutex);
         } // End of for loop of sliding window
     }
 }
@@ -149,7 +162,7 @@ void *receive_reply() {
     char recvBuf[1400];
     int bytesRecvd;
 
-    while (1) {
+    while (Sender->LAR < (int)Frame_num) {
         sender_addrLen = sizeof(sender_addr);
         if ((bytesRecvd = recvfrom(socket_UDP, recvBuf, 1400 , 0, 
                         (struct sockaddr*)&sender_addr, &sender_addrLen)) == -1) {
@@ -159,13 +172,15 @@ void *receive_reply() {
 
         if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {
             int seq_num = recvBuf[2];
+            //fprintf(stderr, "AC %d\n", seq_num);
 
-            pthread_mutex_lock(&mutex);
             int idx, i;
             //if (seq_num - Sender->LAR < SWS) {
+            pthread_mutex_lock(&mutex);
                 idx = (seq_num % RWS);
                 if (!Sender->present[idx]) {
                     Sender->present[idx] = 1;
+                    if (Sender->LAR < 0 && idx == 0) Sender->LAR = 0;
                 }
 
                 for (i = 0; i < RWS; i++) {
@@ -177,18 +192,18 @@ void *receive_reply() {
                     } else {
                         Sender->buff[idx] = &Buffer_frame[next_target];
                         Sender->present[idx] = -2;
+                        //fprintf(stderr, "next %zu\n", next_target);
                     }
                 }
                 Sender->LAR += i;
-            //}
+                //fprintf(stderr, "LAR %d %d\n", Sender->LAR, Frame_num);
             pthread_mutex_unlock(&mutex);
+            //}
         }
     }
 }
 
 void send_msg(char *msg, size_t length) {
-    write(STDERR_FILENO, msg, 2);
-    fprintf(stderr, "%d\n", msg[2]);
     sendto(socket_UDP, msg, length, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
 }
 

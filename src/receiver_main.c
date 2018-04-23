@@ -101,24 +101,24 @@ void receive_packet() {
     char from_addr[100];
     struct sockaddr_in sender_addr;
     socklen_t sender_addrLen;
-    char recvBuf[1500];
-    char msg[100];
+    unsigned char recvBuf[1500];
+    unsigned char msg[100];
     msg[0] = 'A';
     msg[1] = 'C';
 
     int bytesRecvd;
     while(1) {
-        if ((bytesRecvd = recvfrom(socket_UDP, recvBuf, 1000 , 0, 
+        if ((bytesRecvd = recvfrom(socket_UDP, recvBuf, 1500 , 0, 
                         (struct sockaddr*)&sender_addr, &sender_addrLen)) == -1) {
             perror("connectivity listener: recvfrom failed");
             exit(1);
         }
         inet_ntop(AF_INET, &sender_addr.sin_addr, from_addr, 100);
-        write(STDERR_FILENO, recvBuf, bytesRecvd);
         msg[2] = recvBuf[2];
 
         if (recvBuf[0] == 'S' && recvBuf[1] == 'E') {
             sendto(socket_UDP, msg, 3, 0, (struct sockaddr*)&sender_addr, sizeof(sender_addr));
+            fprintf(stderr, "ACK %d %zu\n", recvBuf[2], bytesRecvd);
             handle_sender_msg(recvBuf, bytesRecvd, file_fd);
         }
     }

@@ -42,10 +42,11 @@ size_t read_file_line(int sockfd, char *msg, size_t length);
 /* Generate the packet with the following format:
  *      0 - 1   "SE" (2 byte)
  *      2       seq_num (1 byte)
- *      3 - 6   length  (4 bytes)
- *      7 ~     content
+ *      3       length / 256 
+ *      4       length % 256 (2 bytes)
+ *      5 ~     content
  */
-char *build_msg_packet(Buffer_Frame frame);
+unsigned char *build_msg_packet(Buffer_Frame frame);
 
 
 /* Calculate the new RTT time */
