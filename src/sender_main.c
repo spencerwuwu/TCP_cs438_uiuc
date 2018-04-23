@@ -108,25 +108,35 @@ void *reliable_send() {
     struct timeval current;
 
     while (Sender->LAR < Frame_num) {
+        int idx;
         for (int i = 0; i < SWS; i++) {
-            size_t target = Sender->LAR + i + 1;
+            idx = (i + Sender->LAR) % SWS;
             pthread_mutex_lock(&mutex);
             if (Sender->present[i] == -1) {
-                // Initial frame
-                if (target > Frame_num) continue;
-                send_msg(Sender->packet[i], Sender->packet_len[i]);
+                // Initial
+                size_t target = Sender->LAR + i + 1;
+                if (target > Frame_num) break;
+                Sender->present[i] = 0;
+                Sender->buff[i] = &Buffer_frame[target];
+                send_msg(Sender->buff[i]->packet, Sender->buff[i]->packet_len);
                 gettimeofday(&Sender->send_time[i], 0);
-                sleep(0.5);
+
+            } else if (Sender->present[i] == -2) {
+                // New update buff
+                Sender->present[i] = 0;
+                send_msg(Sender->buff[i]->packet, Sender->buff[i]->packet_len);
+                gettimeofday(&Sender->send_time[i], 0);
 
             } else if (Sender->present[i] == 0) {
-                // See if we have to re-send it
+                // If not ack yet
                 gettimeofday(&current, 0);
-                if (current.tv_usec - Sender->send_time[i].tv_usec > RTT) {
-                    send_msg(Sender->packet[i], Sender->packet_len[i]);
+                if (current.tv_usec - Sender->send_time[i].tv_usec >= RTT) {
+                    send_msg(Sender->buff[i]->packet, Sender->buff[i]->packet_len);
                     gettimeofday(&Sender->send_time[i], 0);
-                } else {
-                    continue;
+                    RTT = RTT * 2;
                 }
+            } else if (Sender->present[i] == 2) {
+                // It is finished
             }
             pthread_mutex_unlock(&mutex);
         } // End of for loop of sliding window
@@ -146,12 +156,33 @@ void *receive_reply() {
             perror("connectivity listener: recvfrom failed");
             exit(1);
         }
+
         if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {
-            int index = recvBuf[2];
+            int seq_num = recvBuf[2];
+
             pthread_mutex_lock(&mutex);
+            int idx, i;
+            //if (seq_num - Sender->LAR < SWS) {
+                idx = (seq_num % RWS);
+                if (!Sender->present[idx]) {
+                    Sender->present[idx] = 1;
+                }
+
+                for (i = 0; i < RWS; i++) {
+                    idx = (i + Sender->LAR) % RWS;
+                    if (Sender->present[idx] != 1) break;
+                    size_t next_target = i + Sender->LAR + SWS;
+                    if (next_target > Frame_num) {
+                        Sender->present[idx] = 2;
+                    } else {
+                        Sender->buff[idx] = &Buffer_frame[next_target];
+                        Sender->present[idx] = -2;
+                    }
+                }
+                Sender->LAR += i;
+            //}
             pthread_mutex_unlock(&mutex);
         }
-
     }
 }
 

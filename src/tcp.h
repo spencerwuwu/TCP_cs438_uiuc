@@ -36,8 +36,8 @@ typedef struct _Buffer_frame {
     char data[FRAME_SIZE];
     size_t length;
     size_t seq_num;
+
     /* packet */
-    struct timeval send_time[SWS];
-    char *packet[SWS];
-    size_t packet_len[SWS];
+    char *packet;
+    size_t packet_len;
 } Buffer_Frame;

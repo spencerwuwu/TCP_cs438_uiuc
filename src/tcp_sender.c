@@ -22,7 +22,7 @@ Sender_info *init_sender() {
     int i = 0;
     for (i = 0; i < SWS; i++) {
         sender->present[i] = -1;
-        sender->packet[i] = NULL;
+        sender->buff[i] = NULL;
     }
     sender->LAR = -1;
     sender->LFS = -1;
@@ -41,6 +41,8 @@ void setup_buff(char *filename, size_t bytes) {
         bytes_read = read_file_line(file_fd, Buffer_frame[i].data, FRAME_SIZE);
         Buffer_frame[i].length = bytes_read;
         Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
+        Buffer_frame[i].packet = build_msg_packet(Buffer_frame[i]);
+        Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
         write(STDERR_FILENO, Buffer_frame[i].data, bytes_read);
     }
 }

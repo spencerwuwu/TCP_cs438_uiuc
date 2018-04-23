@@ -26,6 +26,8 @@ typedef struct _tcp_sender {
     int LAR;    // Last Ack Received
     int LFS;    // Last Frame Sent
     int present[SWS];
+    Buffer_Frame *buff[SWS];
+    struct timeval send_time[SWS];
 
 } Sender_info;
 
