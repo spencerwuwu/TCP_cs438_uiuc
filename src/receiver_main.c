@@ -13,6 +13,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 /*
  * Global variables
  */
@@ -23,13 +24,15 @@ Receiver_info *Receiver;
  */
 static int socket_UDP;
 static int file_fd;
+static int exit_flag = -1;
 
 /*
  * Function Declaration
  */
 void setup_UDP(char *port);
 void setup_filefd(char *filename);
-void receive_packet();
+void *receive_packet();
+void *time_out();
 
 int main(int argc, char** argv)
 {
@@ -49,10 +52,18 @@ int main(int argc, char** argv)
     
     Receiver = init_receiver();
 
-    receive_packet();
+    pthread_t recv_tid;
+    pthread_create(&recv_tid, 0, receive_packet, (void *)0);
+
+    pthread_t time_tid;
+    pthread_create(&time_tid, 0, time_out, (void *)0);
+
+    pthread_join(recv_tid, NULL);
+    pthread_join(time_tid, NULL);
 
 
     close(socket_UDP);
+    close(file_fd);
 }
 
 void setup_UDP(char *port) {
@@ -97,7 +108,7 @@ void setup_filefd(char *filename) {
     }
 }
 
-void receive_packet() {
+void *receive_packet() {
     char from_addr[100];
     struct sockaddr_in sender_addr;
     socklen_t sender_addrLen;
@@ -108,19 +119,41 @@ void receive_packet() {
 
     int bytesRecvd;
     while(1) {
+        sender_addrLen = sizeof(sender_addr);
+        exit_flag = 4;
         if ((bytesRecvd = recvfrom(socket_UDP, recvBuf, 1500 , 0, 
                         (struct sockaddr*)&sender_addr, &sender_addrLen)) == -1) {
             perror("connectivity listener: recvfrom failed");
             exit(1);
         }
-        inet_ntop(AF_INET, &sender_addr.sin_addr, from_addr, 100);
-        msg[2] = recvBuf[2];
+        exit_flag = 4;
 
-        if (recvBuf[0] == 'S' && recvBuf[1] == 'E') {
+        if (recvBuf[0] == 'I' && recvBuf[1] == 'N') {
+            sendto(socket_UDP, "ICK", 3, 0, (struct sockaddr*)&sender_addr, sizeof(sender_addr));
+            exit_flag = 4;
+        } else if (recvBuf[0] == 'S' && recvBuf[1] == 'E') {
+            msg[2] = recvBuf[2];
             sendto(socket_UDP, msg, 3, 0, (struct sockaddr*)&sender_addr, sizeof(sender_addr));
             fprintf(stderr, "ACK %d %zu\n", recvBuf[2], bytesRecvd);
             handle_sender_msg(recvBuf, bytesRecvd, file_fd);
+            exit_flag = 4;
+        } else if (recvBuf[0] == 'E' && recvBuf[1] == 'N') {
+            sendto(socket_UDP, "KKK", 3, 0, (struct sockaddr*)&sender_addr, sizeof(sender_addr));
+            exit_flag = 0;
+            break;
         }
     }
 }
 
+void *time_out() {
+    struct timeval current;
+    struct timeval idle_time;
+    gettimeofday(&idle_time, 0);
+    while (exit_flag == -1 || exit_flag > 0) {
+        if (exit_flag != -1) {
+            if (exit_flag <= 0) exit(0);
+            else exit_flag--;
+        }
+        sleep(1);
+    }
+}

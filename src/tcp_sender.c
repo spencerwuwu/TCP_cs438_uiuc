@@ -42,8 +42,8 @@ void setup_buff(char *filename, size_t bytes) {
         close(file_fd);
         return;
     }
-    //size_t data_size = bytes < local_stat.st_size ? bytes : local_stat.st_size;
-    size_t data_size = local_stat.st_size;
+    size_t data_size = bytes < local_stat.st_size ? bytes : local_stat.st_size;
+    //size_t data_size = local_stat.st_size;
 
     Frame_num = data_size / FRAME_SIZE;
     if (data_size % FRAME_SIZE) Frame_num++;
