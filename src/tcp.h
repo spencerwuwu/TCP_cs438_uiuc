@@ -8,7 +8,8 @@
 #define MAX_SEQ_NO 300
 #define FRAME_SIZE 1000
 
-#define SEND_HEADER 5
+#define SEND_HEADER 6
+#define RTT_ALPHA 0.6
 
 
 /* 

@@ -24,6 +24,7 @@ Sender_info *init_sender() {
     for (i = 0; i < SWS; i++) {
         sender->present[i] = -1;
         sender->buff[i] = NULL;
+        sender->re_send[i] = 0;
     }
     sender->LAR = -1;
     sender->LFS = -1;
@@ -88,6 +89,7 @@ unsigned char *build_msg_packet(Buffer_Frame frame) {
 
     msg[3] = frame.length / 256;
     msg[4] = frame.length % 256;
+    msg[5] = 0;
 
 
     int i = 0;
@@ -96,4 +98,11 @@ unsigned char *build_msg_packet(Buffer_Frame frame) {
     }
 
     return msg;
+}
+
+int calculate_new_rtt(int RTT, int time) {
+    if (time < 0) return RTT;
+    float result = RTT * RTT_ALPHA + (1 - RTT_ALPHA) * time;
+    fprintf(stderr, "RTT: %d %d %f\n", RTT, time, result);
+    return (int)result;
 }

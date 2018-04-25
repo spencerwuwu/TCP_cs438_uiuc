@@ -18,7 +18,7 @@
 Sender_info *Sender;
 Buffer_Frame *Buffer_frame;
 size_t Frame_num;
-long int RTT = 300; // initial RTT to 300 ms
+long int RTT = 60; // initial RTT to 30 ms
 
 /* 
  * Static variables 
@@ -136,10 +136,10 @@ void *reliable_send() {
                 Sender->buff[i] = &Buffer_frame[i];
                 send_msg(Sender->buff[i]->packet, Sender->buff[i]->packet_len);
                 gettimeofday(&Sender->send_time[i], 0);
-                fprintf(stderr, "on %zu %zu %d\n", i, Sender->buff[i]->packet_len, Sender->buff[i]->packet[2]);
+                //fprintf(stderr, "on %zu %zu %d\n", i, Sender->buff[i]->packet_len, Sender->buff[i]->packet[2]);
             } else if (Sender->present[idx] == -2) {
                 // New update buff
-                fprintf(stderr, "on %zu\n", idx);
+                //fprintf(stderr, "on %zu\n", idx);
                 Sender->present[idx] = 0;
                 send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                 gettimeofday(&Sender->send_time[idx], 0);
@@ -148,10 +148,12 @@ void *reliable_send() {
                 // If not ack yet
                 gettimeofday(&current, 0);
                 if (current.tv_usec - Sender->send_time[idx].tv_usec > RTT) {
-                    fprintf(stderr, "re %zu\n", idx);
+                    //fprintf(stderr, "re %zu\n", idx);
+                    Sender->re_send[idx]++;
+                    Sender->buff[idx]->packet[5] += 1;
                     send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                     gettimeofday(&Sender->send_time[idx], 0);
-                    //RTT = RTT + 2;
+                    RTT = RTT + 5;
                 }
             } else if (Sender->present[idx] == 2) {
                 // It is finished
@@ -172,6 +174,7 @@ void *receive_reply() {
     socklen_t sender_addrLen;
     unsigned char recvBuf[1400];
     int bytesRecvd;
+    struct timeval current;
 
     while (Sender->LAR < (int)Frame_num) {
         sender_addrLen = sizeof(sender_addr);
@@ -184,7 +187,7 @@ void *receive_reply() {
             if (Sender->status == LISTEN) Sender->status = ESTABLISHED;
         } else if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {
             int seq_num = recvBuf[2];
-            fprintf(stderr, "AC %d\n", seq_num);
+            //fprintf(stderr, "AC %d\n", seq_num);
 
             int idx, i;
             pthread_mutex_lock(&mutex);
@@ -192,6 +195,12 @@ void *receive_reply() {
             if (!Sender->present[idx]) {
                 Sender->present[idx] = 1;
                 if (Sender->LAR < 0 && idx == 0) Sender->LAR = 0;
+
+                // Update RTT
+                    gettimeofday(&current, 0);
+                    int time = current.tv_usec - Sender->send_time[idx].tv_usec + RTT * (Sender->re_send[idx] - recvBuf[3]);
+                    fprintf(stderr, "send %d %d\n",Sender->re_send[idx], recvBuf[3]);
+                    RTT = calculate_new_rtt(RTT, time);
             }
 
             for (i = 0; i < RWS; i++) {
@@ -203,6 +212,7 @@ void *receive_reply() {
                 } else {
                     Sender->buff[idx] = &Buffer_frame[next_target];
                     Sender->present[idx] = -2;
+                    Sender->re_send[idx] = 0;
                     //fprintf(stderr, "next %zu\n", next_target);
                 }
             }

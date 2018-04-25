@@ -28,7 +28,7 @@ typedef struct _tcp_sender {
     int present[SWS];
     Buffer_Frame *buff[SWS];
     struct timeval send_time[SWS];
-
+    int re_send[SWS];
 } Sender_info;
 
 
@@ -50,6 +50,6 @@ unsigned char *build_msg_packet(Buffer_Frame frame);
 
 
 /* Calculate the new RTT time */
-void calculate_new_rtt(int time);
+int calculate_new_rtt(int RTT, int time);
 
 
