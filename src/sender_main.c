@@ -18,7 +18,7 @@
 Sender_info *Sender;
 Buffer_Frame *Buffer_frame;
 size_t Frame_num;
-long int RTT = 60; // initial RTT to 60 ms
+long int RTT = 100; // initial RTT to 60 ms
 
 /* 
  * Static variables 
@@ -163,10 +163,10 @@ void *reliable_send() {
                 gettimeofday(&current, 0);
                 if (current.tv_usec - Sender->send_time[idx].tv_usec > RTT) {
                     Sender->re_send[idx]++;
-                    Sender->buff[idx]->packet[5] += 1;
+                    Sender->buff[idx]->packet[5] = Sender->re_send[idx];
                     send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
-                fprintf(stderr, "gg %ld\n", current.tv_usec - Sender->send_time[idx].tv_usec);
-                    fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
+                    //fprintf(stderr, "gg %ld\n", current.tv_usec - Sender->send_time[idx].tv_usec);
+                    //fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                     //gettimeofday(&Sender->send_time[idx], 0);
                     RTT = RTT + 10;
                 }
@@ -222,12 +222,12 @@ void *receive_reply() {
                     // Update RTT
                     gettimeofday(&current, 0);
                     //int time = current.tv_usec - Sender->send_time[idx].tv_usec + RTT * (Sender->re_send[idx] - recvBuf[3]);
-                    int time = current.tv_usec - Sender->send_time[idx].tv_usec;
-                    RTT = calculate_new_rtt(RTT, time);
                     if (recvBuf[3] == Sender->re_send[idx]) {
+                        int time = current.tv_usec - Sender->send_time[idx].tv_usec;
+                        RTT = calculate_new_rtt(RTT, time);
                         congestion_sleep.tv_nsec = congestion_sleep.tv_nsec * 0.8;
                     } else {
-                        congestion_sleep.tv_nsec = congestion_sleep.tv_nsec + 10;
+                        //congestion_sleep.tv_nsec = congestion_sleep.tv_nsec + 10;
                     }
                 }
                 //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
