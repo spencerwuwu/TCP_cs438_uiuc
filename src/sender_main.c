@@ -18,7 +18,7 @@
 Sender_info *Sender;
 Buffer_Frame *Buffer_frame;
 size_t Frame_num;
-long int RTT = 600; // initial RTT to 600 ms
+long int RTT = 60; // initial RTT to 60 ms
 
 /* 
  * Static variables 
@@ -26,6 +26,7 @@ long int RTT = 600; // initial RTT to 600 ms
 static int socket_UDP;
 static struct sockaddr_in receiver_addr;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct timespec congestion_sleep;
 
 /*
  * Function Declaration
@@ -60,6 +61,8 @@ int main(int argc, char** argv) {
     setup_buff(argv[3], numBytes);
     Sender = init_sender();
 
+    congestion_sleep.tv_sec = 0;
+    congestion_sleep.tv_nsec = RTT * 200 * 1000; // Initial to be RTT/20
 
     // Start thread for send and receive
 	pthread_t send_tid;
@@ -113,7 +116,7 @@ void *reliable_send() {
 
     struct timespec sleepFor;
     sleepFor.tv_sec = 0;
-    sleepFor.tv_nsec = RTT * 1000 * 1000; // 300 ms
+    sleepFor.tv_nsec = RTT * 500 * 1000; // RTT/2
 
     while (Sender->status == LISTEN) {
         send_msg("IN", 2);
@@ -167,11 +170,13 @@ void *reliable_send() {
                 // It is finished
             }
             pthread_mutex_unlock(&mutex);
+            nanosleep(&congestion_sleep, 0);
             //sleep(1);
         } // End of for loop of sliding window
     }
 
-    for (int k = 0; k < 10; k++) {
+    sleepFor.tv_nsec = RTT * 500 * 1000; // RTT/2
+    for (int k = 0; k < 5; k++) {
         if (Sender->status != ESTABLISHED) break;
         send_msg("EN", 2);
         nanosleep(&sleepFor, 0);
@@ -214,6 +219,11 @@ void *receive_reply() {
                     //int time = current.tv_usec - Sender->send_time[idx].tv_usec + RTT * (Sender->re_send[idx] - recvBuf[3]);
                     int time = current.tv_usec - Sender->send_time[idx].tv_usec;
                     RTT = calculate_new_rtt(RTT, time);
+                    if (recvBuf[3] == Sender->re_send[idx]) {
+                        congestion_sleep.tv_nsec = congestion_sleep.tv_nsec * 0.8;
+                    } else {
+                        congestion_sleep.tv_nsec = congestion_sleep.tv_nsec / 0.8;
+                    }
                 }
                 //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
 
