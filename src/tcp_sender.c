@@ -103,6 +103,6 @@ unsigned char *build_msg_packet(Buffer_Frame frame) {
 int calculate_new_rtt(int RTT, int time) {
     if (time < 0) return RTT;
     float result = RTT * RTT_ALPHA + (1 - RTT_ALPHA) * time;
-    fprintf(stderr, "RTT: %d %d %f\n", RTT, time, result);
+    //fprintf(stderr, "RTT: %d %d %f\n", RTT, time, result);
     return (int)result;
 }

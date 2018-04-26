@@ -18,7 +18,7 @@
 Sender_info *Sender;
 Buffer_Frame *Buffer_frame;
 size_t Frame_num;
-long int RTT = 600; // initial RTT to 30 ms
+long int RTT = 600; // initial RTT to 600 ms
 
 /* 
  * Static variables 
@@ -136,6 +136,7 @@ void *reliable_send() {
             if (Sender->present[idx] == -1) {
                 // Initial
                 if (idx >= Frame_num) {
+                    pthread_mutex_unlock(&mutex);
                     Sender->present[idx] = 2;
                     continue;
                 }
@@ -160,7 +161,7 @@ void *reliable_send() {
                     send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                     //fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                     //gettimeofday(&Sender->send_time[idx], 0);
-                    RTT = RTT + 5;
+                    RTT = RTT + 10;
                 }
             } else if (Sender->present[idx] == 2) {
                 // It is finished
@@ -195,12 +196,14 @@ void *receive_reply() {
             if (Sender->status == LISTEN) Sender->status = ESTABLISHED;
         } else if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {
             int seq_num = recvBuf[2];
-            //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
 
             int idx, i;
-            if ((seq_num - (Sender->LAR % MAX_SEQ_NO) < SWS) || 
-                    (seq_num + MAX_SEQ_NO - (Sender->LAR % MAX_SEQ_NO) < SWS)) {
+            int num = 0;
+            if (Sender->LAR >= 0) num = Sender->LAR;
+            if ((seq_num - (num % MAX_SEQ_NO) < SWS) || 
+                    (seq_num + MAX_SEQ_NO - (num % MAX_SEQ_NO) < SWS)) {
                 pthread_mutex_lock(&mutex);
+                //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
                 idx = (seq_num % RWS);
                 if (!Sender->present[idx]) {
                     Sender->present[idx] = 1;
@@ -212,6 +215,7 @@ void *receive_reply() {
                     int time = current.tv_usec - Sender->send_time[idx].tv_usec;
                     RTT = calculate_new_rtt(RTT, time);
                 }
+                //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
 
                 for (i = 0; i < RWS; i++) {
 
@@ -233,7 +237,6 @@ void *receive_reply() {
             }
 
         } else if (recvBuf[0] == 'K' && recvBuf[1] == 'K' && recvBuf[2] == 'K') {
-            fprintf(stderr, "gg\n");
             Sender->status = CLOSED;
         }
     }
