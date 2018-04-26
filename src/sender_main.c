@@ -148,12 +148,15 @@ void *reliable_send() {
                 send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                 gettimeofday(&Sender->send_time[idx], 0);
                 //fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
+                pthread_mutex_unlock(&mutex);
+
             } else if (Sender->present[idx] == -2) {
                 // New update buff
                 //fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                 Sender->present[idx] = 0;
                 send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                 gettimeofday(&Sender->send_time[idx], 0);
+                pthread_mutex_unlock(&mutex);
 
             } else if (Sender->present[idx] == 0) {
                 // If not ack yet
@@ -162,14 +165,16 @@ void *reliable_send() {
                     Sender->re_send[idx]++;
                     Sender->buff[idx]->packet[5] += 1;
                     send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
-                    //fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
+                fprintf(stderr, "gg %ld\n", current.tv_usec - Sender->send_time[idx].tv_usec);
+                    fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                     //gettimeofday(&Sender->send_time[idx], 0);
                     RTT = RTT + 10;
                 }
-            } else if (Sender->present[idx] == 2) {
+                pthread_mutex_unlock(&mutex);
+            } else {
                 // It is finished
+                pthread_mutex_unlock(&mutex);
             }
-            pthread_mutex_unlock(&mutex);
             nanosleep(&congestion_sleep, 0);
             //sleep(1);
         } // End of for loop of sliding window
@@ -222,7 +227,7 @@ void *receive_reply() {
                     if (recvBuf[3] == Sender->re_send[idx]) {
                         congestion_sleep.tv_nsec = congestion_sleep.tv_nsec * 0.8;
                     } else {
-                        congestion_sleep.tv_nsec = congestion_sleep.tv_nsec / 0.8;
+                        congestion_sleep.tv_nsec = congestion_sleep.tv_nsec + 10;
                     }
                 }
                 //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
