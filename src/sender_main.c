@@ -122,24 +122,31 @@ void *reliable_send() {
 
     while (Sender->LAR < (int)Frame_num) {
         int idx;
-        pthread_mutex_lock(&mutex);
         for (int i = 0; i < SWS; i++) {
+            pthread_mutex_lock(&mutex);
+
+            if (Sender->LAR >= (int)Frame_num) {
+                pthread_mutex_unlock(&mutex);
+                break;
+            }
+
             if (Sender->LAR >= 0) idx = (i + Sender->LAR) % SWS;
             else idx = i;
+
             if (Sender->present[idx] == -1) {
                 // Initial
                 if (idx >= Frame_num) {
                     Sender->present[idx] = 2;
                     continue;
                 }
-                Sender->present[i] = 0;
-                Sender->buff[i] = &Buffer_frame[i];
-                send_msg(Sender->buff[i]->packet, Sender->buff[i]->packet_len);
-                gettimeofday(&Sender->send_time[i], 0);
-                //fprintf(stderr, "on %zu %zu %d\n", i, Sender->buff[i]->packet_len, Sender->buff[i]->packet[2]);
+                Sender->present[idx] = 0;
+                Sender->buff[idx] = &Buffer_frame[idx];
+                send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
+                gettimeofday(&Sender->send_time[idx], 0);
+                //fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
             } else if (Sender->present[idx] == -2) {
                 // New update buff
-                //fprintf(stderr, "on %zu\n", idx);
+                fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                 Sender->present[idx] = 0;
                 send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                 gettimeofday(&Sender->send_time[idx], 0);
@@ -148,18 +155,19 @@ void *reliable_send() {
                 // If not ack yet
                 gettimeofday(&current, 0);
                 if (current.tv_usec - Sender->send_time[idx].tv_usec > RTT) {
-                    //fprintf(stderr, "re %zu\n", idx);
                     Sender->re_send[idx]++;
                     Sender->buff[idx]->packet[5] += 1;
                     send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
+                    //fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                     gettimeofday(&Sender->send_time[idx], 0);
-                    RTT = RTT + 5;
+                    //RTT = RTT + 5;
                 }
             } else if (Sender->present[idx] == 2) {
                 // It is finished
             }
+            pthread_mutex_unlock(&mutex);
+            //sleep(1);
         } // End of for loop of sliding window
-        pthread_mutex_unlock(&mutex);
     }
 
     for (int k = 0; k < 10; k++) {
@@ -187,40 +195,44 @@ void *receive_reply() {
             if (Sender->status == LISTEN) Sender->status = ESTABLISHED;
         } else if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {
             int seq_num = recvBuf[2];
-            //fprintf(stderr, "AC %d\n", seq_num);
+            fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
 
             int idx, i;
-            pthread_mutex_lock(&mutex);
-            idx = (seq_num % RWS);
-            if (!Sender->present[idx]) {
-                Sender->present[idx] = 1;
-                if (Sender->LAR < 0 && idx == 0) Sender->LAR = 0;
+            if ((seq_num - (Sender->LAR % MAX_SEQ_NO) < SWS) || 
+                    (seq_num + MAX_SEQ_NO - (Sender->LAR % MAX_SEQ_NO) < SWS)) {
+                pthread_mutex_lock(&mutex);
+                idx = (seq_num % RWS);
+                if (!Sender->present[idx]) {
+                    Sender->present[idx] = 1;
+                    if (Sender->LAR < 0 && idx == 0) Sender->LAR = 0;
 
-                // Update RTT
+                    // Update RTT
                     gettimeofday(&current, 0);
                     int time = current.tv_usec - Sender->send_time[idx].tv_usec + RTT * (Sender->re_send[idx] - recvBuf[3]);
-                    fprintf(stderr, "send %d %d\n",Sender->re_send[idx], recvBuf[3]);
-                    RTT = calculate_new_rtt(RTT, time);
-            }
-
-            for (i = 0; i < RWS; i++) {
-                idx = (i + Sender->LAR) % RWS;
-                if (Sender->present[idx] != 1) break;
-                size_t next_target = i + Sender->LAR + SWS;
-                if (next_target > Frame_num) {
-                    Sender->present[idx] = 2;
-                } else {
-                    Sender->buff[idx] = &Buffer_frame[next_target];
-                    Sender->present[idx] = -2;
-                    Sender->re_send[idx] = 0;
-                    //fprintf(stderr, "next %zu\n", next_target);
+                    //RTT = calculate_new_rtt(RTT, time);
                 }
+
+                for (i = 0; i < RWS; i++) {
+
+                    idx = (i + Sender->LAR) % RWS;
+                    if (Sender->present[idx] != 1) break;
+                    size_t next_target = i + Sender->LAR + SWS;
+                    if (next_target >= Frame_num) {
+                        Sender->present[idx] = 2;
+                    } else {
+                        Sender->buff[idx] = &Buffer_frame[next_target];
+                        Sender->present[idx] = -2;
+                        Sender->re_send[idx] = 0;
+                        //fprintf(stderr, "next %zu\n", next_target);
+                    }
+                }
+                Sender->LAR += i;
+                //fprintf(stderr, "LAR %d %d\n", Sender->LAR, Frame_num);
+                pthread_mutex_unlock(&mutex);
             }
-            Sender->LAR += i;
-            fprintf(stderr, "LAR %d %d\n", Sender->LAR, Frame_num);
-            pthread_mutex_unlock(&mutex);
 
         } else if (recvBuf[0] == 'K' && recvBuf[1] == 'K' && recvBuf[2] == 'K') {
+            fprintf(stderr, "gg\n");
             Sender->status = CLOSED;
         }
     }

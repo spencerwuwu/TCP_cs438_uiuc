@@ -3,9 +3,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define RWS 150
-#define SWS 150
-#define MAX_SEQ_NO 300
+#define RWS 120
+#define SWS 120
+#define MAX_SEQ_NO 240
 #define FRAME_SIZE 1000
 
 #define SEND_HEADER 6

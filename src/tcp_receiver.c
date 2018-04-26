@@ -35,7 +35,8 @@ void handle_sender_msg(unsigned char *msg, size_t length, int filefd) {
 
 void recv_frame(char *data, size_t length, int seq_num, int filefd) {
     int idx, i;
-    //if (seq_num - Receiver->NFE < RWS) {
+    if ((seq_num - (Receiver->NFE % MAX_SEQ_NO) < RWS) || 
+            (seq_num + MAX_SEQ_NO - (Receiver->NFE % MAX_SEQ_NO) < RWS)) {
         idx = (seq_num % RWS);
 
         if (!Receiver->present[idx]) {
@@ -51,8 +52,8 @@ void recv_frame(char *data, size_t length, int seq_num, int filefd) {
             Receiver->present[idx] = 0;
         }
         Receiver->NFE += i;
-        //fprintf(stderr, "NFE %d\n", Receiver->NFE);
-    //}
+        fprintf(stderr, "NFE %d %d\n", seq_num, Receiver->NFE);
+    }
 }
 
 ssize_t write_to_filefd(int filefd, size_t length, char *data) {
