@@ -18,7 +18,7 @@
 Sender_info *Sender;
 Buffer_Frame *Buffer_frame;
 size_t Frame_num;
-long int RTT = 60; // initial RTT to 30 ms
+long int RTT = 600; // initial RTT to 30 ms
 
 /* 
  * Static variables 
@@ -146,7 +146,7 @@ void *reliable_send() {
                 //fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
             } else if (Sender->present[idx] == -2) {
                 // New update buff
-                fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
+                //fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                 Sender->present[idx] = 0;
                 send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                 gettimeofday(&Sender->send_time[idx], 0);
@@ -159,8 +159,8 @@ void *reliable_send() {
                     Sender->buff[idx]->packet[5] += 1;
                     send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                     //fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
-                    gettimeofday(&Sender->send_time[idx], 0);
-                    //RTT = RTT + 5;
+                    //gettimeofday(&Sender->send_time[idx], 0);
+                    RTT = RTT + 5;
                 }
             } else if (Sender->present[idx] == 2) {
                 // It is finished
@@ -195,7 +195,7 @@ void *receive_reply() {
             if (Sender->status == LISTEN) Sender->status = ESTABLISHED;
         } else if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {
             int seq_num = recvBuf[2];
-            fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
+            //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
 
             int idx, i;
             if ((seq_num - (Sender->LAR % MAX_SEQ_NO) < SWS) || 
@@ -208,8 +208,9 @@ void *receive_reply() {
 
                     // Update RTT
                     gettimeofday(&current, 0);
-                    int time = current.tv_usec - Sender->send_time[idx].tv_usec + RTT * (Sender->re_send[idx] - recvBuf[3]);
-                    //RTT = calculate_new_rtt(RTT, time);
+                    //int time = current.tv_usec - Sender->send_time[idx].tv_usec + RTT * (Sender->re_send[idx] - recvBuf[3]);
+                    int time = current.tv_usec - Sender->send_time[idx].tv_usec;
+                    RTT = calculate_new_rtt(RTT, time);
                 }
 
                 for (i = 0; i < RWS; i++) {

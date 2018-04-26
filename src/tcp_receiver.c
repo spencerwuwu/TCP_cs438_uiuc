@@ -52,7 +52,7 @@ void recv_frame(char *data, size_t length, int seq_num, int filefd) {
             Receiver->present[idx] = 0;
         }
         Receiver->NFE += i;
-        fprintf(stderr, "NFE %d %d\n", seq_num, Receiver->NFE);
+        //fprintf(stderr, "NFE %d %d\n", seq_num, Receiver->NFE);
     }
 }
 
