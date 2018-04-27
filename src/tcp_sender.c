@@ -53,7 +53,7 @@ void setup_buff(char *filename, size_t bytes) {
     size_t bytes_read = 0;
     size_t bytes_to_read = 0;
     for (size_t i = 0; i < Frame_num; i++) {
-        if (i == Frame_num - 1) bytes_to_read = data_size % FRAME_SIZE;
+        if ((i == Frame_num - 1) && (data_size % FRAME_SIZE)) bytes_to_read = data_size % FRAME_SIZE;
         else bytes_to_read = FRAME_SIZE;
         Buffer_frame[i].packet = calloc(bytes_to_read + SEND_HEADER, sizeof(unsigned char));
         bytes_read = read_file_line(file_fd, Buffer_frame[i].packet + SEND_HEADER, bytes_to_read);
