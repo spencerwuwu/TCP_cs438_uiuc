@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 /*
  * Global variables
@@ -18,7 +20,8 @@
 Sender_info *Sender;
 Buffer_Frame *Buffer_frame;
 size_t Frame_num;
-long int RTT = 100; // initial RTT to 60 ms
+int RTT = 100; // initial RTT to 60 ms
+long int congestion_init = 100 * 2 * 1000; // Initial to be RTT/500
 
 /* 
  * Static variables 
@@ -40,6 +43,9 @@ void *receive_reply();
 int main(int argc, char** argv) {
 	unsigned short int udpPort;
 	size_t numBytes;
+
+    int debug_fd = open("debug", O_RDWR);
+    //dup2(debug_fd, STDERR_FILENO);
 	
 	if(argc != 5) {
 		fprintf(stderr, "usage: %s receiver_hostname receiver_port filename_to_xfer bytes_to_xfer\n\n", argv[0]);
@@ -51,18 +57,14 @@ int main(int argc, char** argv) {
     // set up socket and wait for first ack to determine a rtt
 	setup_UDP(argv[1], udpPort);
 
-    /*
-    while (1) {
-        sendto(socket_UDP, "gg\n", 3, 0,
-                    (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
-        nanosleep(&sleepFor, 0);
-    }
-    */
     setup_buff(argv[3], numBytes);
     Sender = init_sender();
 
+    fprintf(stderr, "Finish init buff\n");
+    // Finish initial
+
     congestion_sleep.tv_sec = 0;
-    congestion_sleep.tv_nsec = RTT * 200 * 1000; // Initial to be RTT/20
+    congestion_sleep.tv_nsec = RTT * 20 * 1000;
 
     // Start thread for send and receive
 	pthread_t send_tid;
@@ -113,6 +115,7 @@ void setup_UDP(char *hostname, unsigned short int port) {
 
 void *reliable_send() {
     struct timeval current;
+    struct timeval time_diff;
 
     struct timespec sleepFor;
     sleepFor.tv_sec = 0;
@@ -149,6 +152,7 @@ void *reliable_send() {
                 gettimeofday(&Sender->send_time[idx], 0);
                 //fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                 pthread_mutex_unlock(&mutex);
+                nanosleep(&congestion_sleep, 0);
 
             } else if (Sender->present[idx] == -2) {
                 // New update buff
@@ -157,30 +161,36 @@ void *reliable_send() {
                 send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                 gettimeofday(&Sender->send_time[idx], 0);
                 pthread_mutex_unlock(&mutex);
+                nanosleep(&congestion_sleep, 0);
 
             } else if (Sender->present[idx] == 0) {
                 // If not ack yet
                 gettimeofday(&current, 0);
-                if (current.tv_usec - Sender->send_time[idx].tv_usec > RTT) {
+                //fprintf(stderr, "gg %d\n", RTT);
+                timersub(&current, &Sender->send_time[idx], &time_diff);
+                //fprintf(stderr, "rere %zu %zu %d %ld\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2], time_diff.tv_usec / 1000);
+
+                if (time_diff.tv_sec == 0 && time_diff.tv_usec / 1000 > RTT) {
                     Sender->re_send[idx]++;
                     Sender->buff[idx]->packet[5] = Sender->re_send[idx];
                     send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                     //fprintf(stderr, "gg %ld\n", current.tv_usec - Sender->send_time[idx].tv_usec);
                     //fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
-                    //gettimeofday(&Sender->send_time[idx], 0);
+                    gettimeofday(&Sender->send_time[idx], 0);
                     RTT = RTT + 10;
                 }
                 pthread_mutex_unlock(&mutex);
+
             } else {
                 // It is finished
+                //fprintf(stderr, "gg %d %d\n",idx, Sender->present[idx]);
                 pthread_mutex_unlock(&mutex);
             }
-            nanosleep(&congestion_sleep, 0);
             //sleep(1);
         } // End of for loop of sliding window
     }
 
-    sleepFor.tv_nsec = RTT * 500 * 1000; // RTT/2
+    sleepFor.tv_nsec = RTT * 50 * 1000; // RTT/20
     for (int k = 0; k < 5; k++) {
         if (Sender->status != ESTABLISHED) break;
         send_msg("EN", 2);
@@ -193,7 +203,7 @@ void *receive_reply() {
     socklen_t sender_addrLen;
     unsigned char recvBuf[1400];
     int bytesRecvd;
-    struct timeval current;
+    struct timeval current, time_diff;
 
     while (Sender->LAR < (int)Frame_num) {
         sender_addrLen = sizeof(sender_addr);
@@ -208,13 +218,14 @@ void *receive_reply() {
             int seq_num = recvBuf[2];
 
             int idx, i;
-            int num = 0;
-            if (Sender->LAR >= 0) num = Sender->LAR;
-            if ((seq_num - (num % MAX_SEQ_NO) < SWS) || 
-                    (seq_num + MAX_SEQ_NO - (num % MAX_SEQ_NO) < SWS)) {
+            int LAR = 0;
+            if (Sender->LAR >= 0) LAR = Sender->LAR;
+            if ((seq_num - (LAR % MAX_SEQ_NO) < SWS) || 
+                    (seq_num + MAX_SEQ_NO - (LAR % MAX_SEQ_NO) < SWS)) {
                 pthread_mutex_lock(&mutex);
                 //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
-                idx = (seq_num % RWS);
+                idx = (seq_num % SWS);
+                
                 if (!Sender->present[idx]) {
                     Sender->present[idx] = 1;
                     if (Sender->LAR < 0 && idx == 0) Sender->LAR = 0;
@@ -222,15 +233,23 @@ void *receive_reply() {
                     // Update RTT
                     gettimeofday(&current, 0);
                     //int time = current.tv_usec - Sender->send_time[idx].tv_usec + RTT * (Sender->re_send[idx] - recvBuf[3]);
+                    //fprintf(stderr, "AC %d %d %ld\n", seq_num, RTT, congestion_sleep.tv_nsec);
                     if (recvBuf[3] == Sender->re_send[idx]) {
-                        int time = current.tv_usec - Sender->send_time[idx].tv_usec;
-                        RTT = calculate_new_rtt(RTT, time);
-                        congestion_sleep.tv_nsec = congestion_sleep.tv_nsec * 0.8;
+                        timersub(&current, &Sender->send_time[idx], &time_diff);
+                        if (time_diff.tv_sec == 0) 
+                            RTT = calculate_new_rtt(RTT, time_diff.tv_usec / 1000);
+
+                        if (congestion_sleep.tv_nsec > congestion_init / 100)
+                            congestion_sleep.tv_nsec = congestion_sleep.tv_nsec * 0.8;
                     } else {
-                        //congestion_sleep.tv_nsec = congestion_sleep.tv_nsec + 10;
+                        if (congestion_sleep.tv_nsec < congestion_init * 100)
+                            congestion_sleep.tv_nsec = congestion_sleep.tv_nsec / 0.8;
                     }
                 }
-                //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
+                if (Sender->LAR < 0) {
+                    pthread_mutex_unlock(&mutex);
+                    break;
+                }
 
                 for (i = 0; i < RWS; i++) {
 
