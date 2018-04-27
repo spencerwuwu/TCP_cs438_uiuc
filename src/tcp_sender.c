@@ -52,11 +52,25 @@ void setup_buff(char *filename, size_t bytes) {
     Buffer_frame = calloc(Frame_num, sizeof(Buffer_Frame));
     size_t bytes_read = 0;
     for (size_t i = 0; i < Frame_num; i++) {
-        bytes_read = read_file_line(file_fd, Buffer_frame[i].data, FRAME_SIZE);
+        Buffer_frame[i].packet = calloc(FRAME_SIZE + SEND_HEADER, sizeof(unsigned char));
+        bytes_read = read_file_line(file_fd, Buffer_frame[i].packet + SEND_HEADER, FRAME_SIZE);
         Buffer_frame[i].length = bytes_read;
         Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
-        Buffer_frame[i].packet = build_msg_packet(Buffer_frame[i]);
         Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
+        Buffer_frame[i].packet[0] = 'S';
+        Buffer_frame[i].packet[1] = 'E';
+        Buffer_frame[i].packet[2] = Buffer_frame[i].seq_num;
+
+        Buffer_frame[i].packet[3] = bytes_read / 256;
+        Buffer_frame[i].packet[4] = bytes_read % 256;
+        Buffer_frame[i].packet[5] = 0;
+        /*
+           bytes_read = read_file_line(file_fd, Buffer_frame[i].data, FRAME_SIZE);
+           Buffer_frame[i].length = bytes_read;
+           Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
+           Buffer_frame[i].packet = build_msg_packet(Buffer_frame[i]);
+           Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
+           */
     }
 }
 
