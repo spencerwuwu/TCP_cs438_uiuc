@@ -51,9 +51,12 @@ void setup_buff(char *filename, size_t bytes) {
 
     Buffer_frame = calloc(Frame_num, sizeof(Buffer_Frame));
     size_t bytes_read = 0;
+    size_t bytes_to_read = 0;
     for (size_t i = 0; i < Frame_num; i++) {
-        Buffer_frame[i].packet = calloc(FRAME_SIZE + SEND_HEADER, sizeof(unsigned char));
-        bytes_read = read_file_line(file_fd, Buffer_frame[i].packet + SEND_HEADER, FRAME_SIZE);
+        if (i == Frame_num - 1) bytes_to_read = data_size % FRAME_SIZE;
+        else bytes_to_read = FRAME_SIZE;
+        Buffer_frame[i].packet = calloc(bytes_to_read + SEND_HEADER, sizeof(unsigned char));
+        bytes_read = read_file_line(file_fd, Buffer_frame[i].packet + SEND_HEADER, bytes_to_read);
         Buffer_frame[i].length = bytes_read;
         Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
         Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
