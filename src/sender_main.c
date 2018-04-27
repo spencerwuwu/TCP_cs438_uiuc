@@ -196,6 +196,7 @@ void *reliable_send() {
         send_msg("EN", 2);
         nanosleep(&sleepFor, 0);
     }
+    exit(0);
 }
 
 void *receive_reply() {
@@ -272,6 +273,7 @@ void *receive_reply() {
 
         } else if (recvBuf[0] == 'K' && recvBuf[1] == 'K' && recvBuf[2] == 'K') {
             Sender->status = CLOSED;
+            exit(0);
         }
     }
 }

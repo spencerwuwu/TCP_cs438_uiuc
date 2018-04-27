@@ -140,7 +140,7 @@ void *receive_packet() {
             exit_flag = 4;
         } else if (recvBuf[0] == 'E' && recvBuf[1] == 'N') {
             sendto(socket_UDP, "KKK", 3, 0, (struct sockaddr*)&sender_addr, sizeof(sender_addr));
-            exit_flag = 0;
+            exit(0);
             break;
         }
     }
