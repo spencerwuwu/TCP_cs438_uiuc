@@ -9,6 +9,8 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <sys/io.h>
+#include <sys/mman.h>
 
 /*
  * Global variables
@@ -17,6 +19,7 @@ extern Sender_info *Sender;
 extern Buffer_Frame *Buffer_frame;
 extern size_t Frame_num;
 
+unsigned char *data_pool;
 
 Sender_info *init_sender() {
     Sender_info *sender = malloc(sizeof(Sender_info));
@@ -49,6 +52,8 @@ void setup_buff(char *filename, size_t bytes) {
     Frame_num = data_size / FRAME_SIZE;
     if (data_size % FRAME_SIZE) Frame_num++;
 
+    data_pool = (char *) mmap (0, data_size, PROT_READ, MAP_PRIVATE, file_fd, 0);
+
     Buffer_frame = calloc(Frame_num, sizeof(Buffer_Frame));
     size_t bytes_read = 0;
     size_t bytes_to_read = 0;
@@ -56,7 +61,9 @@ void setup_buff(char *filename, size_t bytes) {
         if ((i == Frame_num - 1) && (data_size % FRAME_SIZE)) bytes_to_read = data_size % FRAME_SIZE;
         else bytes_to_read = FRAME_SIZE;
         Buffer_frame[i].packet = calloc(bytes_to_read + SEND_HEADER, sizeof(unsigned char));
-        bytes_read = read_file_line(file_fd, Buffer_frame[i].packet + SEND_HEADER, bytes_to_read);
+        //bytes_read = read_file_line(file_fd, Buffer_frame[i].packet + SEND_HEADER, bytes_to_read);
+
+        /*
         Buffer_frame[i].length = bytes_read;
         Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
         Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
@@ -67,13 +74,14 @@ void setup_buff(char *filename, size_t bytes) {
         Buffer_frame[i].packet[3] = bytes_read / 256;
         Buffer_frame[i].packet[4] = bytes_read % 256;
         Buffer_frame[i].packet[5] = 0;
-        /*
-           bytes_read = read_file_line(file_fd, Buffer_frame[i].data, FRAME_SIZE);
-           Buffer_frame[i].length = bytes_read;
-           Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
-           Buffer_frame[i].packet = build_msg_packet(Buffer_frame[i]);
-           Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
            */
+           //bytes_read = read_file_line(file_fd, Buffer_frame[i].data, FRAME_SIZE);
+        bytes_read = bytes_to_read;
+        Buffer_frame[i].length = bytes_read;
+        Buffer_frame[i].data = data_pool + i * FRAME_SIZE;
+        Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
+        Buffer_frame[i].packet = build_msg_packet(Buffer_frame[i]);
+        Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
     }
 }
 

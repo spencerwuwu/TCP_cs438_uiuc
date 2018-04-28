@@ -34,7 +34,8 @@ typedef struct _tcp_ack {
  * Sender Local buffer 
  */
 typedef struct _Buffer_frame {
-    char data[FRAME_SIZE];
+    //unsigned char data[FRAME_SIZE];
+    unsigned char *data;
     size_t length;
     int seq_num;
 
