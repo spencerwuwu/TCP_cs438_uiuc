@@ -134,7 +134,8 @@ void *receive_packet() {
         } else if (recvBuf[0] == 'S' && recvBuf[1] == 'E') {
             msg[2] = recvBuf[2];
             msg[3] = recvBuf[5];
-            sendto(socket_UDP, msg, 4, 0, (struct sockaddr*)&sender_addr, sizeof(sender_addr));
+            msg[4] = recvBuf[6];
+            sendto(socket_UDP, msg, 5, 0, (struct sockaddr*)&sender_addr, sizeof(sender_addr));
             //fprintf(stderr, "ACK %d_%d %zu\n", recvBuf[2], recvBuf[5], bytesRecvd);
             handle_sender_msg(recvBuf, bytesRecvd, file_fd);
             exit_flag = 4;

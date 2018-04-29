@@ -110,11 +110,12 @@ unsigned char *build_msg_packet(Buffer_Frame frame) {
     unsigned char *msg = malloc(frame.length + SEND_HEADER); 
     msg[0] = 'S';
     msg[1] = 'E';
-    msg[2] = frame.seq_num;
+    msg[2] = frame.seq_num / 256;
 
     msg[3] = frame.length / 256;
     msg[4] = frame.length % 256;
     msg[5] = 0;
+    msg[6] = frame.seq_num % 256;
 
 
     int i = 0;

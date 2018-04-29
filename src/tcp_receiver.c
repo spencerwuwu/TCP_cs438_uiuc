@@ -26,7 +26,7 @@ Receiver_info *init_receiver() {
 
 
 void handle_sender_msg(unsigned char *msg, size_t length, int filefd) {
-    int seq_num = msg[2];
+    int seq_num = msg[2] * 256 + msg[6];
     size_t size = msg[3] * 256 + msg[4];
 
     //fprintf(stderr, "size %zu\n", size);

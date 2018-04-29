@@ -216,7 +216,7 @@ void *receive_reply() {
         if (recvBuf[0] == 'I' && recvBuf[1] == 'C' && recvBuf[2] == 'K') {
             if (Sender->status == LISTEN) Sender->status = ESTABLISHED;
         } else if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {
-            int seq_num = recvBuf[2];
+            int seq_num = recvBuf[2] * 256 + recvBuf[4];
 
             int idx, i;
             int LAR = 0;
