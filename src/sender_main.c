@@ -89,27 +89,6 @@ void setup_UDP(char *hostname, unsigned short int port) {
 		exit(1);
 	}
 
-
-    /*
-    struct timeval current;
-
-    struct timespec sleepFor;
-    sleepFor.tv_sec = 0;
-    sleepFor.tv_nsec = 30 * 1000 * 1000; // 30 ms
-    
-    int seq_num = 0;
-    char *msg = calloc(10, sizeof(char));
-    while (1) {
-        if (sender->status != LISTEN) {
-            break;
-        }
-        sprintf(msg, "ini_%d.", seq_num);
-        sendto(socket_UDP, msg, 10, 0,
-                    (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
-        nanosleep(&sleepFor, 0);
-    }
-    free(msg);
-    */
 }
 
 /* Sending all packets */
@@ -151,13 +130,11 @@ void *reliable_send() {
                 Sender->buff[idx] = &Buffer_frame[idx];
                 send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                 gettimeofday(&Sender->send_time[idx], 0);
-                //fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                 pthread_mutex_unlock(&mutex);
                 nanosleep(&congestion_sleep, 0);
 
             } else if (Sender->present[idx] == -2) {
                 // New update buff
-                //fprintf(stderr, "on %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                 Sender->present[idx] = 0;
                 send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
                 gettimeofday(&Sender->send_time[idx], 0);
@@ -167,16 +144,12 @@ void *reliable_send() {
             } else if (Sender->present[idx] == 0) {
                 // If not ack yet
                 gettimeofday(&current, 0);
-                //fprintf(stderr, "gg %d\n", RTT);
                 timersub(&current, &Sender->send_time[idx], &time_diff);
-                //fprintf(stderr, "rere %zu %zu %d %ld\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2], time_diff.tv_usec / 1000);
 
                 if (time_diff.tv_sec == 0 && time_diff.tv_usec / 1000 > RTT) {
                     Sender->re_send[idx]++;
                     Sender->buff[idx]->packet[5] = Sender->re_send[idx];
                     send_msg(Sender->buff[idx]->packet, Sender->buff[idx]->packet_len);
-                    //fprintf(stderr, "gg %ld\n", current.tv_usec - Sender->send_time[idx].tv_usec);
-                    //fprintf(stderr, "re %zu %zu %d\n", idx, Sender->buff[idx]->packet_len, Sender->buff[idx]->packet[2]);
                     gettimeofday(&Sender->send_time[idx], 0);
                     RTT = RTT + 10;
                 }
@@ -184,10 +157,8 @@ void *reliable_send() {
 
             } else {
                 // It is finished
-                //fprintf(stderr, "gg %d %d\n",idx, Sender->present[idx]);
                 pthread_mutex_unlock(&mutex);
             }
-            //sleep(1);
         } // End of for loop of sliding window
     }
 

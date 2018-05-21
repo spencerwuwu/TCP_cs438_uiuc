@@ -3,12 +3,12 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define RWS 120
-#define SWS 120
-#define MAX_SEQ_NO 240
-#define FRAME_SIZE 1000
+#define RWS 360
+#define SWS 360
+#define MAX_SEQ_NO 720
+#define FRAME_SIZE 1460
 
-#define SEND_HEADER 6
+#define SEND_HEADER 7
 #define RTT_ALPHA 0.6
 
 
