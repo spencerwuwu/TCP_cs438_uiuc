@@ -30,7 +30,6 @@ Sender_info *init_sender() {
         sender->re_send[i] = 0;
     }
     sender->LAR = -1;
-    sender->LFS = -1;
     sender->status = LISTEN;
     return sender;
 }
@@ -47,7 +46,6 @@ void setup_buff(char *filename, size_t bytes) {
         return;
     }
     size_t data_size = bytes < local_stat.st_size ? bytes : local_stat.st_size;
-    //size_t data_size = local_stat.st_size;
 
     Frame_num = data_size / FRAME_SIZE;
     if (data_size % FRAME_SIZE) Frame_num++;
@@ -61,21 +59,6 @@ void setup_buff(char *filename, size_t bytes) {
         if ((i == Frame_num - 1) && (data_size % FRAME_SIZE)) bytes_to_read = data_size % FRAME_SIZE;
         else bytes_to_read = FRAME_SIZE;
         Buffer_frame[i].packet = calloc(bytes_to_read + SEND_HEADER, sizeof(unsigned char));
-        //bytes_read = read_file_line(file_fd, Buffer_frame[i].packet + SEND_HEADER, bytes_to_read);
-
-        /*
-        Buffer_frame[i].length = bytes_read;
-        Buffer_frame[i].seq_num = i % MAX_SEQ_NO;
-        Buffer_frame[i].packet_len = bytes_read + SEND_HEADER;
-        Buffer_frame[i].packet[0] = 'S';
-        Buffer_frame[i].packet[1] = 'E';
-        Buffer_frame[i].packet[2] = Buffer_frame[i].seq_num;
-
-        Buffer_frame[i].packet[3] = bytes_read / 256;
-        Buffer_frame[i].packet[4] = bytes_read % 256;
-        Buffer_frame[i].packet[5] = 0;
-           */
-           //bytes_read = read_file_line(file_fd, Buffer_frame[i].data, FRAME_SIZE);
         bytes_read = bytes_to_read;
         Buffer_frame[i].length = bytes_read;
         Buffer_frame[i].data = data_pool + i * FRAME_SIZE;
@@ -116,7 +99,6 @@ unsigned char *build_msg_packet(Buffer_Frame frame) {
     msg[4] = frame.length % 256;
     msg[5] = 0;
 
-
     int i = 0;
     for ( ; i < frame.length; i++) {
         msg[SEND_HEADER + i] = frame.data[i];
@@ -128,6 +110,5 @@ unsigned char *build_msg_packet(Buffer_Frame frame) {
 int calculate_new_rtt(int RTT, int time) {
     if (time < 0) return RTT;
     float result = RTT * RTT_ALPHA + (1 - RTT_ALPHA) * time;
-    //fprintf(stderr, "RTT: %d %d %f\n", RTT, time, result);
     return (int)result;
 }

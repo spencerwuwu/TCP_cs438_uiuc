@@ -24,7 +24,6 @@ typedef struct _tcp_sender {
 
     /* structures for sliding windows */
     int LAR;    // Last Ack Received
-    int LFS;    // Last Frame Sent
     int present[SWS];
     Buffer_Frame *buff[SWS];
     struct timeval send_time[SWS];
@@ -44,7 +43,8 @@ size_t read_file_line(int sockfd, char *msg, size_t length);
  *      2       seq_num (1 byte)
  *      3       length / 256 
  *      4       length % 256 (2 bytes)
- *      5 ~     content
+ *      5       resend-time of the packet
+ *      6 ~     content
  */
 unsigned char *build_msg_packet(Buffer_Frame frame);
 

@@ -29,7 +29,6 @@ void handle_sender_msg(unsigned char *msg, size_t length, int filefd) {
     int seq_num = msg[2];
     size_t size = msg[3] * 256 + msg[4];
 
-    //fprintf(stderr, "size %zu\n", size);
     recv_frame(msg + SEND_HEADER, size, seq_num, filefd);
 }
 
@@ -52,7 +51,6 @@ void recv_frame(char *data, size_t length, int seq_num, int filefd) {
             Receiver->present[idx] = 0;
         }
         Receiver->NFE += i;
-        //fprintf(stderr, "NFE %d %d\n", seq_num, Receiver->NFE);
     }
 }
 
@@ -61,7 +59,6 @@ ssize_t write_to_filefd(int filefd, size_t length, char *data) {
     int rc = 0;
     while (bytes < (ssize_t)length) {
         rc = write(filefd, data + bytes, length - bytes);
-        //write(STDERR_FILENO, data + bytes, length - bytes);
         if (rc == 0) return 0;
         else if (rc == -1) {
             if (errno == EINTR) continue;

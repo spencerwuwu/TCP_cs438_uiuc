@@ -20,8 +20,8 @@
 Sender_info *Sender;
 Buffer_Frame *Buffer_frame;
 size_t Frame_num;
-int RTT = 100; // initial RTT to 60 ms
-long int congestion_init = 100 * 2 * 1000; // Initial to be RTT/500
+int RTT = 100; // initial RTT to 100 ms
+long int congestion_init = 100 * 20 * 1000; // Initial to be RTT/50
 
 /* 
  * Static variables 
@@ -45,7 +45,6 @@ int main(int argc, char** argv) {
 	size_t numBytes;
 
     int debug_fd = open("debug", O_RDWR);
-    //dup2(debug_fd, STDERR_FILENO);
 	
 	if(argc != 5) {
 		fprintf(stderr, "usage: %s receiver_hostname receiver_port filename_to_xfer bytes_to_xfer\n\n", argv[0]);
@@ -61,7 +60,7 @@ int main(int argc, char** argv) {
     Sender = init_sender();
 
     fprintf(stderr, "Finish init buff\n");
-    // Finish initial
+    // Finish initializing
 
     congestion_sleep.tv_sec = 0;
     congestion_sleep.tv_nsec = RTT * 20 * 1000;
@@ -113,6 +112,7 @@ void setup_UDP(char *hostname, unsigned short int port) {
     */
 }
 
+/* Sending all packets */
 void *reliable_send() {
     struct timeval current;
     struct timeval time_diff;
@@ -121,6 +121,7 @@ void *reliable_send() {
     sleepFor.tv_sec = 0;
     sleepFor.tv_nsec = RTT * 500 * 1000; // RTT/2
 
+    // Initializing state
     while (Sender->status == LISTEN) {
         send_msg("IN", 2);
         nanosleep(&sleepFor, 0);
@@ -199,6 +200,7 @@ void *reliable_send() {
     exit(0);
 }
 
+/* Upon receiving a message */
 void *receive_reply() {
     struct sockaddr_in sender_addr;
     socklen_t sender_addrLen;
@@ -213,34 +215,33 @@ void *receive_reply() {
             perror("connectivity listener: recvfrom failed");
             exit(1);
         }
-        if (recvBuf[0] == 'I' && recvBuf[1] == 'C' && recvBuf[2] == 'K') {
+        if (recvBuf[0] == 'I' && recvBuf[1] == 'C' && recvBuf[2] == 'K') {  // ICK -> for initializing a connection
             if (Sender->status == LISTEN) Sender->status = ESTABLISHED;
-        } else if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {
+        } else if (recvBuf[0] == 'A' && recvBuf[1] == 'C') {                // AC<seq_num>
             int seq_num = recvBuf[2];
 
+            // Sender->LAR is initialized as -1
             int idx, i;
             int LAR = 0;
             if (Sender->LAR >= 0) LAR = Sender->LAR;
             if ((seq_num - (LAR % MAX_SEQ_NO) < SWS) || 
                     (seq_num + MAX_SEQ_NO - (LAR % MAX_SEQ_NO) < SWS)) {
                 pthread_mutex_lock(&mutex);
-                //fprintf(stderr, "AC %d %d\n", seq_num, Sender->LAR);
                 idx = (seq_num % SWS);
                 
                 if (!Sender->present[idx]) {
                     Sender->present[idx] = 1;
                     if (Sender->LAR < 0 && idx == 0) Sender->LAR = 0;
 
-                    // Update RTT
+                    // Update RTT & congestion window
                     gettimeofday(&current, 0);
-                    //int time = current.tv_usec - Sender->send_time[idx].tv_usec + RTT * (Sender->re_send[idx] - recvBuf[3]);
-                    //fprintf(stderr, "AC %d %d %ld\n", seq_num, RTT, congestion_sleep.tv_nsec);
                     if (recvBuf[3] == Sender->re_send[idx]) {
                         timersub(&current, &Sender->send_time[idx], &time_diff);
                         if (time_diff.tv_sec == 0) 
                             RTT = calculate_new_rtt(RTT, time_diff.tv_usec / 1000);
 
-                        if (congestion_sleep.tv_nsec > congestion_init / 100)
+                        // I restrict the time not to grow too big or small
+                        if (congestion_sleep.tv_nsec > congestion_init / 100) 
                             congestion_sleep.tv_nsec = congestion_sleep.tv_nsec * 0.8;
                     } else {
                         if (congestion_sleep.tv_nsec < congestion_init * 100)
@@ -252,8 +253,8 @@ void *receive_reply() {
                     break;
                 }
 
+                // Perform sliding window
                 for (i = 0; i < RWS; i++) {
-
                     idx = (i + Sender->LAR) % RWS;
                     if (Sender->present[idx] != 1) break;
                     size_t next_target = i + Sender->LAR + SWS;
@@ -263,11 +264,9 @@ void *receive_reply() {
                         Sender->buff[idx] = &Buffer_frame[next_target];
                         Sender->present[idx] = -2;
                         Sender->re_send[idx] = 0;
-                        //fprintf(stderr, "next %zu\n", next_target);
                     }
                 }
                 Sender->LAR += i;
-                //fprintf(stderr, "LAR %d %d\n", Sender->LAR, Frame_num);
                 pthread_mutex_unlock(&mutex);
             }
 
@@ -278,6 +277,7 @@ void *receive_reply() {
     }
 }
 
+/* A wrapping function for sendto */
 void send_msg(char *msg, size_t length) {
     sendto(socket_UDP, msg, length, 0, (struct sockaddr*)&receiver_addr, sizeof(receiver_addr));
 }
